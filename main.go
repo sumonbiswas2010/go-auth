@@ -23,5 +23,7 @@ func main() {
 	// 	})
 	// })
 	r.POST("/signup", validations.SignUp, controllers.SignUp)
+	r.POST("/login", validations.Login, controllers.Login)
+	r.GET("/login", validations.CheckToken, controllers.CheckLogin)
 	r.Run()
 }

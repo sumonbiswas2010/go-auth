@@ -5,29 +5,21 @@ import (
 	"fmt"
 	"go-auth/initializers"
 	"go-auth/models"
+	"go-auth/validations"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func SignUp(c *gin.Context) {
 
-	var body struct {
-		Email    string
-		Password string
-		Name     string
-	}
-
-	if c.Bind(&body) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": "failed",
-			"error":  "invalid request",
-		})
-		return
-	}
+	body := c.MustGet("body").(validations.SignupData)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 
@@ -68,11 +60,75 @@ func SignUp(c *gin.Context) {
 		})
 		return
 	}
-	fmt.Println("Helllllllo")
+	// var user models.User
+	// initializers.DB.First(&user, "email=?", body.Email)
+	// spew.Dump(user)
+
+	// if user.ID == 0 {
+	// 	c.JSON(http.StatusBadRequest, gin.H{
+	// 		"status": "failed",
+	// 		"error":  "invalid email",
+	// 	})
+	// 	return
+	// }
 	c.JSON(http.StatusAccepted, gin.H{
 		"status": "true",
 		"error":  "create user done",
 	})
 	return
+
+}
+func Login(c *gin.Context) {
+
+	body := c.MustGet("body").(validations.LoginData)
+
+	var user models.User
+	initializers.DB.First(&user, "email=?", body.Email)
+
+	if user.ID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "failed",
+			"error":  "invalid email",
+		})
+		return
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "failed",
+			"error":  "invalid pass",
+		})
+		return
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  user.ID,
+		"exp":  time.Now().Add(time.Hour * 1).Unix(),
+		"name": user.Name,
+	})
+
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		spew.Dump(err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "failed",
+			"error":  "invalid token generation",
+		})
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{
+		"status": "done",
+		"token":  tokenString,
+	})
+	return
+}
+
+func CheckLogin(c *gin.Context) {
+	userData := c.MustGet("userData").(jwt.MapClaims)
+	c.JSON(http.StatusAccepted, gin.H{
+		"status": "done",
+		"token":  "Logged In",
+		"user": userData["name"],
+	})
 
 }
